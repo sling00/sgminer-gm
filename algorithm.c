@@ -1379,10 +1379,8 @@ static const char *lookup_algorithm_alias(const char *lookup_alias, uint8_t *par
   ALGO_ALIAS_PARAM("adaptive-nscrypt", "ckolivas", 11);
   ALGO_ALIAS_PARAM("adaptive-n-scrypt", "ckolivas", 11);
   ALGO_ALIAS_PARAM("cryptonight", "cryptonight", 1);
-  ALGO_ALIAS_PARAM("xmr", "cryptonight", 1);
-  ALGO_ALIAS_PARAM("xmrv1", "cryptonight", 1);
-  ALGO_ALIAS_PARAM("xmr1", "cryptonight", 1);
   ALGO_ALIAS_PARAM("monero", "cryptonight", 7);
+  ALGO_ALIAS_PARAM("xmr", "cryptonight", 7);
   ALGO_ALIAS_PARAM("xmrv7", "cryptonight", 7);
   ALGO_ALIAS_PARAM("xmr7", "cryptonight", 7);
   ALGO_ALIAS_PARAM("stellite", "cryptonight", 3);
