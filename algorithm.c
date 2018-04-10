@@ -1415,8 +1415,6 @@ static const char *lookup_algorithm_alias(const char *lookup_alias, uint8_t *par
 void set_algorithm(algorithm_t* algo, const char* newname_alias)
 {
   const char *newname;
-  uint8_t nfactor = 10;
-  uint8_t cryptonight_version = 1;
 
   //load previous cryptonight version value if any
   uint8_t old_cn_version = ((algo->cryptonight_version) ? algo->cryptonight_version : 0);
@@ -1435,30 +1433,30 @@ void set_algorithm(algorithm_t* algo, const char* newname_alias)
 
   copy_algorithm_settings(algo, newname);
 
+  //set nfactor
+  uint8_t nfactor;
+
+  //set default nfactor version if not returned by alias lookup
+  if (param == 0) {
+    param = 10;
+  }
+
   //use old nfactor if it was previously set and is different than the one set by alias
-  if ((old_nfactor > 0) && (old_nfactor != param)) {
-    nfactor = old_nfactor;
-  }
-  else {
-    nfactor = param;
-  }
+  nfactor = (((old_nfactor > 0) && (old_nfactor != param)) ? old_nfactor : param );
 
   set_algorithm_nfactor(algo, nfactor);
 
+  //cryptonight version
   if (algo->type == ALGO_CRYPTONIGHT) {
+    uint8_t cryptonight_version;
 
     //set default cryptonight version if not returned by alias lookup
     if (param == 0) {
-      param = cryptonight_version;
+      param = 1;
     }
 
     //use old cryptonight version if it was previously set and is different than the one set by alias
-    if ((old_cn_version > 0) && (old_cn_version != param)) {
-      cryptonight_version = old_cn_version;
-    }
-    else {
-      cryptonight_version = param;
-    }
+    cryptonight_version = (((old_cn_version > 0) && (old_cn_version != param)) ? old_cn_version : param );
 
     algo->cryptonight_version = cryptonight_version;
   }
@@ -1471,14 +1469,14 @@ void set_algorithm(algorithm_t* algo, const char* newname_alias)
 
 void set_algorithm_nfactor(algorithm_t* algo, const uint8_t nfactor)
 {
+  algo->nfactor = nfactor;
+  algo->n = (1 << nfactor);
+
   switch (algo->type)
   {
     //only apply if algo is scrypt or nscrypt
     case ALGO_NSCRYPT:
     case ALGO_SCRYPT:
-      algo->nfactor = nfactor;
-      algo->n = (1 << nfactor);
-
       //if nfactor is 10, switch to SCRYPT
       if (algo->nfactor == 10) {
         algo->type = ALGO_SCRYPT;
