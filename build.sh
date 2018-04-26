@@ -5,7 +5,7 @@ echo "Note, you should sudo devtools-install before running this."
 git submodule init
 git submodule update
 ./autogen.sh
-CFLAGS="-O2 -Wall -march=native -std=gnu99 -I/opt/driver-switching/fglrx/runtime-lib" LDFLAGS="-L/opt/driver-switching/fglrx/runtime-lib" ./configure
+CFLAGS="-Ofast -Wall -march=native -std=gnu99 -I/opt/driver-switching/fglrx/runtime-lib" LDFLAGS="-L/opt/driver-switching/fglrx/runtime-lib" ./configure
 make
 mkdir ../sgminer-gm-WhiteSea
 strip sgminer

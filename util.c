@@ -681,6 +681,29 @@ bool eth_hex2bin(unsigned char *p, const char *hexstr, size_t len)
   return hex2bin(p, hexstr, len);
 }
 
+char *bytearray2hex(const uint8_t *p, size_t len)
+{
+  char *s = (char *)calloc(len+1,1);
+  if (unlikely(!s))
+    quithere(1, "Failed to calloc");
+
+  for (uint8_t j = 0; j < len; j++) {
+    if (unlikely(p[j] >= 16))
+      quithere(1, "invalid hex digit");
+    sprintf(&s[j], "%X", p[j]);
+  }
+  s[len] = '\0';
+  return s;
+}
+
+bool bytearray_eq(const uint8_t *x, const uint8_t *y, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    if (x[i] != y[i])
+      return false;
+  }
+  return true;
+}
+
 bool fulltest(const unsigned char *hash, const unsigned char *target)
 {
   uint32_t *hash32 = (uint32_t *)hash;

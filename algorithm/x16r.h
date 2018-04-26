@@ -43,5 +43,4 @@ void x16r_getalgolist(const uint8_t* data, uint8_t *output)
   }
 }
 
-
-#endif /* X14_H */
+#endif /* X16R_H */

@@ -281,6 +281,8 @@ extern int opt_remoteconf_retry;
 extern int opt_remoteconf_wait;
 extern bool opt_remoteconf_usecache;
 
+extern bool opt_benchmark;
+extern uint8_t opt_benchmark_seq[17];
 
 enum alive {
   LIFE_WELL,

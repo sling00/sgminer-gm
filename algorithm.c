@@ -30,6 +30,7 @@
 #include "algorithm/bitblock.h"
 #include "algorithm/x14.h"
 #include "algorithm/x16r.h"
+#include "algorithm/x16s.h"
 #include "algorithm/fresh.h"
 #include "algorithm/whirlcoin.h"
 #include "algorithm/neoscrypt.h"
@@ -59,7 +60,8 @@ const char *algorithm_type_str[] = {
   "X13",
   "X14",
   "X15",
-  "X16r",
+  "X16R",
+  "X16S",
   "Keccak",
   "Quarkcoin",
   "Twecoin",
@@ -723,28 +725,98 @@ static cl_int queue_x14_old_kernel(struct __clState *clState, struct _dev_blk_ct
   return status;
 }
 
+extern char *bytearray2hex(const uint8_t *p, size_t len);
+extern bool bytearray_eq(const uint8_t *x, const uint8_t *y, size_t len);
+
 static cl_int queue_x16r_kernel(struct __clState *clState, struct _dev_blk_ctx *blk, __maybe_unused cl_uint threads)
-{
+{ 
   cl_kernel *kernel;
   unsigned int num;
   cl_ulong le_target;
   cl_int status = 0;
   uint8_t hashOrder[X16R_HASH_FUNC_COUNT];
+  
+  le_target = *(cl_ulong *)(blk->work->device_target + 24);
+  flip80(clState->cldata, blk->work->data);
+  if (opt_benchmark) { 
+    for (size_t i = 0; i < X16R_HASH_FUNC_COUNT; i++)
+      hashOrder[i] = opt_benchmark_seq[i];
+  }
+  else {
+    x16r_getalgolist(&clState->cldata[4], hashOrder);
+  }
+  
+  if (!bytearray_eq(clState->hash_order, hashOrder, X16R_HASH_FUNC_COUNT)) {
+    for (size_t i = 0; i < X16R_HASH_FUNC_COUNT; i++)
+      clState->hash_order[i] = hashOrder[i];
+    if (!blk->work->thr_id) {
+      char *s = bytearray2hex(hashOrder, X16R_HASH_FUNC_COUNT);
+      applog(LOG_NOTICE, "hash order %s", s);
+      free(s);
+    }
+  }
+  
+  status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, 80, clState->cldata, 0, NULL, NULL);
+  if (status != CL_SUCCESS)
+    return -1;
+  
+  for (int i = 0; i < X16R_HASH_FUNC_COUNT; i++) {
+    kernel = &clState->extra_kernels[2*i];
+    CL_SET_ARG_0(clState->padbuffer8);
+  }
+  
+  kernel = &clState->extra_kernels[2*hashOrder[0]+1];
+  num = 0;
+  CL_SET_ARG(clState->CLbuffer0);
+  CL_SET_ARG(clState->padbuffer8);
+  
+  kernel = &clState->kernel;
+  num = 0;
+  CL_SET_ARG(clState->padbuffer8);
+  CL_SET_ARG(clState->outputBuffer);
+  CL_SET_ARG(le_target);
+  
+  return status;
+}
+
+static cl_int queue_x16s_kernel(struct __clState *clState, struct _dev_blk_ctx *blk, __maybe_unused cl_uint threads)
+{
+  cl_kernel *kernel;
+  unsigned int num;
+  cl_ulong le_target;
+  cl_int status = 0;
+  uint8_t hashOrder[X16S_HASH_FUNC_COUNT];
 
   le_target = *(cl_ulong *)(blk->work->device_target + 24);
   flip80(clState->cldata, blk->work->data);
-  x16r_getalgolist(&clState->cldata[4], hashOrder);
+  if (opt_benchmark) {
+    for (size_t i = 0; i < X16S_HASH_FUNC_COUNT; i++)
+      hashOrder[i] = opt_benchmark_seq[i];
+  }
+  else {
+    x16s_getalgolist(&clState->cldata[4], hashOrder);
+  }
+
+  if (!bytearray_eq(clState->hash_order, hashOrder, X16S_HASH_FUNC_COUNT)) {
+    for (size_t i = 0; i < X16S_HASH_FUNC_COUNT; i++)
+      clState->hash_order[i] = hashOrder[i];
+    if (!blk->work->thr_id) {
+      char *s = bytearray2hex(hashOrder, X16S_HASH_FUNC_COUNT);
+      applog(LOG_NOTICE, "hash order %s", s);
+      free(s);
+    }
+  }
 
   status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, 80, clState->cldata, 0, NULL, NULL);
   if (status != CL_SUCCESS)
     return -1;
 
-  for (int i = 0; i < X16R_HASH_FUNC_COUNT; i++) {
-    kernel = &clState->extra_kernels[i];
+  for (int i = 0; i < X16S_HASH_FUNC_COUNT; i++) {
+    kernel = &clState->extra_kernels[2*i];
     CL_SET_ARG_0(clState->padbuffer8);
   }
 
-  kernel = &clState->extra_kernels[hashOrder[0] + X16R_HASH_FUNC_COUNT];
+  kernel = &clState->extra_kernels[2*hashOrder[0]+1];
   num = 0;
   CL_SET_ARG(clState->CLbuffer0);
   CL_SET_ARG(clState->padbuffer8);
@@ -762,12 +834,9 @@ static cl_int enqueue_x16r_kernels(struct __clState *clState,
                                    size_t *p_global_work_offset, size_t *globalThreads, size_t *localThreads)
 {
   cl_int status;
-  uint8_t hashOrder[X16R_HASH_FUNC_COUNT];
-
-  x16r_getalgolist(&clState->cldata[4], hashOrder);
 
   status = clEnqueueNDRangeKernel(clState->commandQueue,
-      clState->extra_kernels[hashOrder[0] + X16R_HASH_FUNC_COUNT],
+      clState->extra_kernels[2*clState->hash_order[0]+1],
       1, p_global_work_offset,
       globalThreads, localThreads, 0, NULL, NULL);
   if (unlikely(status != CL_SUCCESS)) {
@@ -777,7 +846,7 @@ static cl_int enqueue_x16r_kernels(struct __clState *clState,
 
   for (int i = 1; i < X16R_HASH_FUNC_COUNT; i++) {
     status = clEnqueueNDRangeKernel(clState->commandQueue,
-        clState->extra_kernels[hashOrder[i]],
+        clState->extra_kernels[2*clState->hash_order[i]],
         1, p_global_work_offset,
         globalThreads, localThreads, 0, NULL, NULL);
     if (unlikely(status != CL_SUCCESS)) {
@@ -798,6 +867,42 @@ static cl_int enqueue_x16r_kernels(struct __clState *clState,
   return 0;
 }
 
+static cl_int enqueue_x16s_kernels(struct __clState *clState,
+                                   size_t *p_global_work_offset, size_t *globalThreads, size_t *localThreads)
+{
+  cl_int status;
+
+  status = clEnqueueNDRangeKernel(clState->commandQueue,
+      clState->extra_kernels[2*clState->hash_order[0]+1],
+      1, p_global_work_offset,
+      globalThreads, localThreads, 0, NULL, NULL);
+  if (unlikely(status != CL_SUCCESS)) {
+    applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
+    return status;
+  }
+
+  for (int i = 1; i < X16S_HASH_FUNC_COUNT; i++) {
+    status = clEnqueueNDRangeKernel(clState->commandQueue,
+        clState->extra_kernels[2*clState->hash_order[i]],
+        1, p_global_work_offset,
+        globalThreads, localThreads, 0, NULL, NULL);
+    if (unlikely(status != CL_SUCCESS)) {
+      applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
+      return status;
+    }
+  }
+
+  status = clEnqueueNDRangeKernel(clState->commandQueue,
+      clState->kernel,
+      1, p_global_work_offset,
+      globalThreads, localThreads, 0, NULL, NULL);
+  if (unlikely(status != CL_SUCCESS)) {
+    applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
+    return status;
+  }
+
+  return 0;
+}
 
 static cl_int queue_fresh_kernel(struct __clState *clState, struct _dev_blk_ctx *blk, __maybe_unused cl_uint threads)
 {
@@ -1367,7 +1472,9 @@ static algorithm_settings_t algos[] = {
   { "bitblock", ALGO_X15, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 14, 4 * 16 * 4194304, 0, bitblock_regenhash, NULL, queue_bitblock_kernel, gen_hash, append_x13_compiler_options },
   { "bitblockold", ALGO_X15, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 10, 4 * 16 * 4194304, 0, bitblock_regenhash, NULL, queue_bitblockold_kernel, gen_hash, append_x13_compiler_options },
 
-  { "x16r", ALGO_X16R, "", 1, 256, 256, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 32, 8 * 16 * 4194304, 0, x16r_regenhash, NULL, queue_x16r_kernel, gen_hash, append_x13_compiler_options, enqueue_x16r_kernels },
+  { "x16r", ALGO_X16R, "x16", 1, 256, 256, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 32, 8 * 16 * 4194304, 0, x16r_regenhash, NULL, queue_x16r_kernel, gen_hash, append_x13_compiler_options, enqueue_x16r_kernels },
+
+  { "x16s", ALGO_X16S, "x16", 1, 256, 256, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 32, 8 * 16 * 4194304, 0, x16s_regenhash, NULL, queue_x16s_kernel, gen_hash, append_x13_compiler_options, enqueue_x16s_kernels },
 
   { "talkcoin-mod", ALGO_NIST, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 4, 8 * 16 * 4194304, 0, talkcoin_regenhash, NULL, queue_talkcoin_mod_kernel, gen_hash, append_x11_compiler_options },
 

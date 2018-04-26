@@ -194,6 +194,12 @@ double opt_diff_mult = 0.0;
 char *opt_kernel_path;
 char *sgminer_path;
 
+bool opt_benchmark = false;
+uint8_t opt_benchmark_seq[17] = {
+  0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7,
+  0x8, 0x9, 0xA, 0xB, 0xC, 0xD, 0XE, 0XF
+};
+
 #define QUIET (opt_quiet || opt_realquiet)
 
 struct thr_info *control_thr;
@@ -1398,6 +1404,24 @@ char *set_difficulty_multiplier(char *arg)
   return NULL;
 }
 
+char *set_benchmark_sequence(char *arg)
+{
+  if (!(arg && arg[0]))
+    return "Invalid parameter for set benchmark sequence";
+  if (strlen(arg) != 16)
+    return "Benchmark sequence must be 16 characters";
+  uint i;
+  for (i = 0; i < strlen(arg); i++) {
+    if (!( ('0' <= arg[i] <= '9') || ('A' <= arg[i] <= 'F')))
+      return sprintf("Invalid hex digit %c", arg[i]);
+    if (arg[i] >= 'A')
+      opt_benchmark_seq[i] = arg[i] - 'A' + 10;
+    else
+      opt_benchmark_seq[i] = arg[i] - '0';
+  }
+  opt_benchmark = true;
+}
+
 /* These options are available from config file or commandline */
 struct opt_table opt_config_table[] = {
   OPT_WITH_ARG("--algorithm|--kernel|-k",
@@ -1558,6 +1582,15 @@ struct opt_table opt_config_table[] = {
   OPT_WITHOUT_ARG("--luffa-parallel",
       opt_set_bool, &opt_luffa_parallel,
       "Set SPH_LUFFA_PARALLEL for Xn derived algorithms (Can give better hashrate for some GPUs)"),
+  OPT_WITHOUT_ARG("--benchmark",
+      opt_set_bool, &opt_benchmark,
+      "Enables benchmark mode for x16r/x16s. Hardcodes the hash order to"
+      " run each hash function exactly once"),
+  OPT_WITH_ARG("--benchmark-sequence",
+      set_benchmark_sequence, NULL, NULL,
+      "Hardcode the hash order in x16r/x16s"
+      " for benchmarking purposes. Must be an uppercase hex string"
+      "of length 16"),
 #ifdef HAVE_CURSES
   OPT_WITHOUT_ARG("--incognito",
       opt_set_bool, &opt_incognito,
